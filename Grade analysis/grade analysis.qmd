@@ -1,0 +1,149 @@
+---
+title: "Grade analysis"
+author: "Emmanuel de MOREL"
+format: html
+echo : false
+---
+
+```{r}
+library(here)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+library(readr)
+library(stringr)
+grades <- read_delim("C:/Users/demor/OneDrive/Bureau/Master Dauphine/M1/Courses S1/Data Management and Programming/Lecture24;10;23/grades.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+here::i_am("Grade analysis.Rproj")
+```
+Question 2. I compute the minimum, maximum, median and mean grade at the Exam and I include the results as a tabble in the rendered document.
+```{r}
+#Question 2
+stat_exam <- summarise(grades, min_exam = min(Exam,na.rm= TRUE), max_exam = max(Exam,na.rm= TRUE), median_exam = median(Exam, na.rm= TRUE), mean_exam = mean(Exam, na.rm= TRUE))
+
+knitr::kable(stat_exam)
+```
+Question 3. I count the number of students who did not take the final exam.
+```{r}
+#Question 3
+exam_absent <- sum(is.na(grades$Exam))
+print(exam_absent)
+```
+
+I sum the number of "NA" find in the column "Exam", there are 60. Thus, there are 60 students who did not take the final exam
+
+
+Question 4. I represent graphically the distribution of grades at the Exam by using a bar chart
+```{r}
+#Question 4
+ggplot(grades,(aes(x=Exam, fill = after_stat(count)))) + geom_bar(na.rm = TRUE, colour="black") + geom_vline(xintercept = quantile(grades$Exam, .5, na.rm = TRUE),na.rm = TRUE, colour = "red") + labs(title = "Distribution of grades at the Exam", caption = "The red line is the median") + scale_fill_gradient()
+```
+Question 5. I compute the number of students in each Group.
+```{r}
+#Question 5
+students_by_groups <- grades %>% group_by(Group) %>% count() %>% rename("number of students" = n)
+
+knitr::kable(students_by_groups)
+```
+Question 6. I plot a graph with the number of students in each groups
+```{r}
+#Question 6
+ggplot(students_by_groups, aes(x=`Group`, y=`number of students`)) + geom_col(fill = "gray50", colour = "black") + theme(axis.text.x=element_text(angle=50, size=8, vjust=0.5)) + labs(title = "Number of students in each group")
+```
+Question 7. I plot two different types of graph to represent the distribution of the grades at the Exam conditioned by the group.
+```{r}
+#Question 7
+
+ggplot(grades, aes(x = Group, y = Exam, fill = Group)) + geom_boxplot(na.rm = TRUE) + theme(axis.text.x=element_text(angle=50, size=8, vjust=0.5)) + labs(title = "Exam conditioned by the group", x = "Group", y = "Grades")
+
+ggplot(grades, aes(x = Group, y = Exam, fill = Group)) + geom_violin(na.rm = TRUE, draw_quantiles = c(0.25, 0.5, 0.75))  + theme(axis.text.x=element_text(angle=50, size=8, vjust=0.5)) + labs(title = "Exam conditioned by the group", x = "Group", y = "Grades")
+```
+Question 8. I compute the numbers of students who missed the Exam in each Group
+```{r}
+#Question 8
+absent_group_exam <- grades %>% group_by(`Group`) %>% summarise(count = sum(is.na(Exam))) 
+
+knitr::kable(absent_group_exam)
+
+```
+Question 9. I represent graphically the results obtained in the previous question. 
+```{r}
+#Question 9
+ggplot(absent_group_exam, aes(x=Group, y = count)) + geom_col(fill = "grey50", colour = "black") + theme(axis.text.x=element_text(angle=50, size=8, vjust=0.5)) + labs(title = "Number of students who missed the Exam in each Group", x = "Group", y = "Number of students") 
+```
+```{r}
+#Question 10
+new_df <- grades %>% group_by(Id, Group) %>% pivot_longer(cols = -c("Id","Group"), names_to = "name")
+```
+Question 11. I compute the number of missing grades in total for each student
+
+```{r}
+#Question 11
+absent_student <- new_df %>% group_by(`Id`) %>% summarise(count = sum(is.na(value))) 
+
+```
+
+Question 12. I plot the distribution of the number of missing grades per student
+```{r}
+#Question 12
+absent_student_distribution <- absent_student %>% group_by(count) %>% summarise(value = n())
+
+ggplot(absent_student_distribution, aes(x=count,y=value, fill = value)) + geom_col(colour = "black") + labs(title = "Distribution of the number of missing grades per student", x = "Number of missing grades", y = "Number of students") + scale_fill_gradient(low = "lightblue", high = "darkblue")
+
+
+```
+Question 13. I Compute the number of students who missed the Exam in each Group
+```{r}
+#Question 13
+missing_exam <- new_df %>% group_by(`Group`) %>% filter(str_starts(name,"Exam")) %>% summarise(count = sum(is.na(value))) 
+  
+knitr::kable(missing_exam)
+```
+Question 14. By using the new dataframe I compute the number of missing grades for the online each student
+```{r}
+#Question 14
+online_missing_grades <- new_df %>% group_by(`Id`) %>% filter(str_starts(name,"Online_MCQ_")) %>% summarise(online_miss = sum(is.na(value)))
+```
+
+Question 15. I represent graphically the distribution of the grade at the Exam conditioned by the number of missing grade for the online tests.
+```{r}
+#Question 15
+grades_online <- merge(grades, online_missing_grades, by = "Id")
+condition_Exam_online <- grades_online %>% group_by(Exam) %>% summarise(online_miss = n()) %>% filter(!is.na(Exam))
+
+ggplot(condition_Exam_online,(aes(x=`online_miss`, y=`Exam`))) + geom_jitter(aes(colour =online_miss)) + labs(title = "Distribution of the grade at the Exam conditioned by the number of missing grade for the online tests ", x = "Number of missing grade for online tests", y = "Grade at the exam") + scale_colour_viridis_c(option="plasma") + geom_smooth(method=lm, formula = 'y ~ x') 
+
+knitr::kable(condition_Exam_online)
+```
+Question 16. I  create a table with two columns: Id to identify students and Missed with value TRUE
+when the student miss at least one MCQ_xx grade and FALSE when they miss no grade. Then, I plot it in a chart.
+```{r}
+#Question 16
+table_missed_MCQ <- new_df %>% group_by(Id) %>% filter(str_starts(name,"MCQ_")) %>% select(`Id`,`value`) %>% summarise(miss = anyNA(value))
+
+ggplot(table_missed_MCQ, aes(x=miss, fill = miss)) + geom_bar() + labs(title = "Number of students who missed at least on grade corresponding to TRUE and number of students who missed no grade corresponding to FALSE") 
+```
+
+Question 17. I create a table with two columns : Group to identify groups and P_missed with the percentage of students in each group who missed at least on MCQ_xx grade. 
+```{r}
+#Question 17 
+group_table_missed_MCQ <- new_df %>% group_by(`Group`) %>% filter(str_starts(name,"MCQ_")) %>% select(`Group`,`value`)
+
+group_table_missed_MCQ$TF <- is.na(group_table_missed_MCQ$value)
+group_table_missed_MCQ <- group_table_missed_MCQ %>% group_by(`Group`) %>% select(`Group`,`TF`) %>% summarise(P_missed = mean((`TF`)*100))
+
+knitr::kable(group_table_missed_MCQ)
+```
+Question 18. I represent graphically the average grade at the Exam per group as a function of the percentage of missed MCQ_xx. 
+```{r}
+#Question 18 
+avrg_group <- grades %>% group_by(`Group`) %>% select(`Group`,`Exam`) %>% summarise(average = mean(`Exam`, na.rm = TRUE))
+
+avrg_group <- merge(avrg_group,group_table_missed_MCQ, by = "Group")
+
+ggplot(avrg_group, aes(x=`P_missed`, y = `average`)) + geom_jitter(aes(colour =P_missed)) + scale_colour_viridis_c(option="inferno") + geom_smooth(method=lm, formula = 'y ~ x') + labs(title = "The average grade at the Exam per group as a function of the percentage of missed MCQ_xx ", x = "Percentage of missing grades", y = "Average grade at the exam per group")
+
+knitr::kable(avrg_group)
+```
+
